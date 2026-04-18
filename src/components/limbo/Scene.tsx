@@ -40,16 +40,23 @@ export const Scene: React.FC = () => {
   // ── Selection state ─────────────────────────────────────────────────────────
   const [selected_side, set_selected_side] = useState<SelectedSide>(null)
 
-  // Guard ref: set to true on first box hit so useFrame never fires twice.
-  // Using a plain ref avoids writing to ref during render.
-  const has_selected_ref = useRef(false)
+  // Debounce ref: tracks the last Y velocity when a box was hit to prevent
+  // multiple hits during the same jump arc (while velocity is still positive).
+  const last_hit_velocity_y = useRef(0)
 
-  // Dynamic X-bounds: open the selected gate and stop at the outer room wall.
-  // Side rooms span ±ROOM_HALF_W to ±3×ROOM_HALF_W; leave 0.4 u before the wall.
+  // Dynamic X-bounds: when a side is selected, allow access to that side room.
+  // Always reset both bounds initially, then open the selected side.
   const effective_bounds = useRef({ ...world_bounds })
   useEffect(() => {
-    if (selected_side === 'left')  effective_bounds.current.minX = -(ROOM_HALF_W * 3 - 0.4)
-    if (selected_side === 'right') effective_bounds.current.maxX =  (ROOM_HALF_W * 3 - 0.4)
+    // Reset to lobby bounds first
+    effective_bounds.current = { ...world_bounds }
+    
+    // Then open the selected side to include the side room
+    if (selected_side === 'left') {
+      effective_bounds.current.minX = -(ROOM_HALF_W * 3 - 0.4)  // Left side room
+    } else if (selected_side === 'right') {
+      effective_bounds.current.maxX = (ROOM_HALF_W * 3 - 0.4)   // Right side room
+    }
   }, [selected_side])
 
   // ── Responsive camera Z + room height ───────────────────────────────────────
@@ -113,20 +120,32 @@ export const Scene: React.FC = () => {
     }
 
     // ── Selection-box hit detection ────────────────────────────────────────
-    // Trigger once when the character's head clips the box while rising.
-    if (!has_selected_ref.current && velocity_ref.current.y > 0.5) {
+    // Allow switching between bricks any time. Debounce by velocity to prevent
+    // multiple hits during the same jump arc.
+    const curr_vy = velocity_ref.current.y
+    if (curr_vy > 0.5 && curr_vy !== last_hit_velocity_y.current) {
       const head_y = char_pos.y + 1.88   // approximate top of character
       const in_y   = head_y >= BOX_Y - BOX_HALF_H - 0.05 && head_y <= BOX_Y + BOX_HALF_H + 0.65
 
       if (in_y) {
+        let new_selection: SelectedSide = null
+        
         if (Math.abs(char_pos.x - BOX_LEFT_X) < BOX_HALF_W + 0.32) {
-          has_selected_ref.current = true
-          set_selected_side('left')
+          new_selection = 'left'
         } else if (Math.abs(char_pos.x - BOX_RIGHT_X) < BOX_HALF_W + 0.32) {
-          has_selected_ref.current = true
-          set_selected_side('right')
+          new_selection = 'right'
+        }
+        
+        if (new_selection) {
+          last_hit_velocity_y.current = curr_vy  // Record this velocity to prevent repeat hits
+          set_selected_side(new_selection)
         }
       }
+    }
+
+    // Reset velocity debounce when character lands (new jump possible)
+    if (char_pos.y <= 0.001) {
+      last_hit_velocity_y.current = 0
     }
 
     if (character_group_ref.current) {
