@@ -1,7 +1,10 @@
 .scene-root {
   position: relative;
+  /* Fill the full available viewport — dvh accounts for mobile browser chrome. */
   width: 100vw;
+  width: 100dvw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: radial-gradient(circle at 20% 30%, #3a3d42 0%, #0a0b0d 55%, #050506 100%);
 }

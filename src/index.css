@@ -5,8 +5,10 @@
 html,
 body,
 #root {
+  /* Full available viewport; dvh collapses when browser chrome hides (mobile). */
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   margin: 0;
 }
 

@@ -26,4 +26,4 @@ export const BOX_RIGHT_X   =  1.2   // "Sign Up"  — opens right gate
  * When true: Drei OrbitControls + light helper + grid.
  * Set to false for the fixed side-view game camera.
  */
-export const DEBUG_R3F_ORBIT = true
+export const DEBUG_R3F_ORBIT = false

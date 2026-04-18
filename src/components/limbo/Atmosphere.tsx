@@ -6,28 +6,35 @@ interface AtmosphereProps {
 }
 
 /**
- * Limbo-style atmosphere:
- * - Bright washed-out sky background
- * - Dense close fog in the same colour so distant geometry hazes into white
- * - HemisphereLight (bright sky / dark ground) gives silhouette shading with no extra point lights
+ * Atmosphere — dark room aesthetic:
+ * - Background matches room interior so no white ever shows outside the geometry
+ * - Fog matches background so any distant geometry fades to dark, not white
+ * - Lighting keeps walls visible while preserving the moody dark-room feel
  */
 export const Atmosphere: React.FC<AtmosphereProps> = ({ dirLightRef }) => (
   <>
-    {/* Bright overcast sky — Limbo's signature look */}
-    <color attach="background" args={['#c4cad3']} />
+    {/* Dark background — matches room interior; any gap outside the room is invisible */}
+    <color attach="background" args={['#1a1c24']} />
 
-    {/* Fog matching background: starts at 8 u (just past mid-scene), hazes out quickly */}
-    <fog attach="fog" args={['#c4cad3', 8, 26]} />
+    {/* Dark fog so distant/outside geometry fades to the same dark background, not white */}
+    <fog attach="fog" args={['#1a1c24', 18, 42]} />
 
-    {/* Main lighting: sky is bright, ground is very dark → top surfaces lit, undersides dark */}
-    <hemisphereLight args={['#d2d8e4', '#1c2028', 1.15]} />
+    {/* Hemisphere: dim but present ambient — sky slightly cool, ground near-black */}
+    <hemisphereLight args={['#4a5060', '#0e1016', 1.4]} />
 
-    {/* Kept only for the yellow debug helper in SceneDebugControls — very dim so it doesn't flatten the silhouettes */}
+    {/* Main key light from above/front — lights wall and floor faces from the camera side */}
     <directionalLight
       ref={dirLightRef}
-      position={[2, 8, 6]}
-      intensity={0.12}
-      color="#e8ecf4"
+      position={[0, 7, 10]}
+      intensity={1.2}
+      color="#e0e8f4"
+    />
+
+    {/* Soft fill from the left so the right wall face gets some light too */}
+    <directionalLight
+      position={[-5, 3, 5]}
+      intensity={0.5}
+      color="#b0bcd0"
     />
   </>
 )
