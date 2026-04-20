@@ -19,7 +19,9 @@ export const LimboScene: React.FC<LimboSceneProps> = ({ className = '' }) => {
           <Scene />
         </Suspense>
       </Canvas>
-      <div className="hint">← → Walk &nbsp;·&nbsp; ↑ Jump &nbsp;·&nbsp; Jump to hit a sign to open the gate</div>
+      <div className="hint">
+        Lobby: ← → or A/D · ↑/W jump. Side room: type in fields (WASD paused while typing) · Enter submits · or jump on SUBMIT
+      </div>
     </main>
   )
 }
