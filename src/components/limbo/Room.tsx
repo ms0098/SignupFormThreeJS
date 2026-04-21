@@ -435,7 +435,7 @@ export const Room: React.FC<RoomProps> = ({ selected_side, room_height }) => {
         outlineWidth={0.012}
         outlineColor="#000000"
       >
-        Choose the side you want to sign in or sign up
+        Jump up and hit the SIGN IN or SIGN UP box
       </Text>
       <Text
         position={[0, room_height - 4.8, 0.22]}
@@ -447,8 +447,9 @@ export const Room: React.FC<RoomProps> = ({ selected_side, room_height }) => {
         outlineWidth={0.012}
         outlineColor="#000000"
       >
-        and get started with your journey
+        from below to start your journey!
       </Text>
+ 
 
       {/* ── Selection boxes ────────────────────────────────────────────────── */}
       <SelectionBox x={BOX_LEFT_X}  label="SIGN IN"  selected={is_left}  />
