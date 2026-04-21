@@ -47,6 +47,31 @@ import { useKeyboardState } from './useKeyboardState'
 // Must match the fov prop on <Canvas> in LimboScene.tsx.
 const GAME_FOV_RAD = (65 * Math.PI) / 180
 
+/**
+ * Soft X follow (lobby / side room) but never let the character leave the horizontal frustum.
+ * On narrow aspects, `half_view_x` is small so the clamp pulls the target toward `char_x`
+ * (full tracking). On wide screens, margins are large so the gentle 22% / 80% follow still applies.
+ */
+function camera_follow_target_x(params: {
+  char_x: number
+  /** Canvas width / height — drives horizontal FOV in world units at the play plane. */
+  aspect: number
+  cam_z: number
+  in_lobby: boolean
+  max_cam_x: number
+}): number {
+  const { char_x, aspect, cam_z, in_lobby, max_cam_x } = params
+  const follow_pct = in_lobby ? 0.22 : 0.8
+  const half_tan = Math.tan(GAME_FOV_RAD / 2)
+  const half_view_x = cam_z * half_tan * aspect
+  // Keep most of the body inside the view (approx. half character ≈ 0.3 + padding).
+  const edge_margin = 0.9
+  const max_offset = Math.max(0.25, half_view_x - edge_margin)
+  let target = char_x * follow_pct
+  target = MathUtils.clamp(target, char_x - max_offset, char_x + max_offset)
+  return MathUtils.clamp(target, -max_cam_x, max_cam_x)
+}
+
 const FORM_ERROR_TOAST_ID = 'limbo-form-validation-toast'
 
 /** Returns a user-facing message if Sign In is invalid, otherwise null. */
@@ -305,35 +330,26 @@ export const Scene: React.FC = () => {
     }
   }, [selected_side])
 
-  // ── Responsive camera Z + room height ───────────────────────────────────────
-  // Camera Z is solved so the full room width fits the horizontal frustum.
-  // Room height equals the FULL visible vertical frustum height at that Z so
-  // floor sits at the screen bottom and ceiling at the top — no sky visible.
-  // Camera is centered on the room midpoint so the view matches exactly.
-  const { size, camera } = useThree()
-  const camera_z_ref   = useRef(12)
-  const camera_y_ref   = useRef(ROOM_HEIGHT / 2)   // updated on every resize
-  const [room_height, set_room_height] = useState(ROOM_HEIGHT)
+  // ── Camera: fixed world units; viewport only changes what you see ─────────────
+  // Lobby + two side rooms keep the same width in world space; we do not scale walls or gates by aspect.
+  // Z is derived only from vertical framing of ROOM_HEIGHT (plus small padding). The canvas aspect then
+  // controls horizontal field of view: narrow (mobile) shows a slimmer slice, wide screens show more.
+  const { camera } = useThree()
+  const camera_z_ref = useRef(12)
+  const camera_y_ref = useRef(ROOM_HEIGHT / 2)
+  const room_height = ROOM_HEIGHT
 
   useEffect(() => {
-    const aspect       = size.width / size.height
-    const half_tan     = Math.tan(GAME_FOV_RAD / 2)
-
-    // Z needed to show full room width (+ 1 u padding per side).
-    const target_width = ROOM_HALF_W * 2 + 2
-    const needed_z     = target_width / (2 * half_tan * aspect)
+    const half_tan = Math.tan(GAME_FOV_RAD / 2)
+    const vertical_world = room_height + 0.2
+    const needed_z = vertical_world / (2 * half_tan)
     camera_z_ref.current = MathUtils.clamp(needed_z, 7, 28)
-
-    // Room height = exact visible height at this Z → fills screen top to bottom.
-    const visible_h    = 2 * camera_z_ref.current * half_tan - 0.2
-    const new_height   = Math.max(visible_h, ROOM_HEIGHT)
-    camera_y_ref.current = new_height / 2   // camera centred on room mid-point
+    camera_y_ref.current = room_height / 2
 
     camera.position.z = camera_z_ref.current
     camera.position.y = camera_y_ref.current
-
-    set_room_height(new_height)
-  }, [size, camera])
+    // set_room_height(new_height)
+  }, [camera, room_height])
 
   const last_submit_hit_ms_ref = useRef(0)
   const handle_form_submit_ref = useRef(handle_form_submit)
@@ -355,11 +371,18 @@ export const Scene: React.FC = () => {
         character_group_ref.current.position.set(char_pos.x, char_pos.y, 0)
       }
       if (!DEBUG_R3F_ORBIT) {
-        const in_lobby     = Math.abs(char_pos.x) <= ROOM_HALF_W
-        const follow_pct   = in_lobby ? 0.22 : 0.80
-        const max_cam_x    = ROOM_HALF_W * 3 - 2.5
-        const target_cam_x = MathUtils.clamp(char_pos.x * follow_pct, -max_cam_x, max_cam_x)
-        state.camera.position.x = MathUtils.damp(state.camera.position.x, target_cam_x, 5, delta)
+        const aspect = state.size.width / Math.max(1, state.size.height)
+        const max_cam_x = ROOM_HALF_W * 3 - 2.5
+        const in_lobby = Math.abs(char_pos.x) <= ROOM_HALF_W
+        const target_cam_x = camera_follow_target_x({
+          char_x: char_pos.x,
+          aspect,
+          cam_z: camera_z_ref.current,
+          in_lobby,
+          max_cam_x,
+        })
+        const damp = aspect < 0.52 ? 10 : 5
+        state.camera.position.x = MathUtils.damp(state.camera.position.x, target_cam_x, damp, delta)
         state.camera.position.y = camera_y_ref.current
         state.camera.position.z = camera_z_ref.current
         state.camera.up.set(0, 1, 0)
@@ -500,17 +523,21 @@ export const Scene: React.FC = () => {
     }
 
     // ── Camera ─────────────────────────────────────────────────────────────
-    // X follow: gentle 22 % drift in the lobby so both walls stay on-screen.
-    //           Once the character enters a side room (|x| > ROOM_HALF_W) switch
-    //           to 80 % follow so the camera properly tracks into the new room.
-    // Y / Z: from resize effect — perfectly centred and sized to the viewport.
+    // X: soft follow (22% lobby / 80% side) + frustum clamp so the boy stays visible on narrow screens.
+    // Y / Z: fixed from vertical framing; aspect widens/narrows horizontal view without changing Z.
     if (!DEBUG_R3F_ORBIT) {
-      const in_lobby     = Math.abs(char_pos.x) <= ROOM_HALF_W
-      const follow_pct   = in_lobby ? 0.22 : 0.80
-      // Never pan past the outer side-room walls (3×RHW) minus a small margin.
-      const max_cam_x    = ROOM_HALF_W * 3 - 2.5
-      const target_cam_x = MathUtils.clamp(char_pos.x * follow_pct, -max_cam_x, max_cam_x)
-      state.camera.position.x = MathUtils.damp(state.camera.position.x, target_cam_x, 5, delta)
+      const aspect = state.size.width / Math.max(1, state.size.height)
+      const max_cam_x = ROOM_HALF_W * 3 - 2.5
+      const in_lobby = Math.abs(char_pos.x) <= ROOM_HALF_W
+      const target_cam_x = camera_follow_target_x({
+        char_x: char_pos.x,
+        aspect,
+        cam_z: camera_z_ref.current,
+        in_lobby,
+        max_cam_x,
+      })
+      const damp = aspect < 0.52 ? 10 : 5
+      state.camera.position.x = MathUtils.damp(state.camera.position.x, target_cam_x, damp, delta)
       state.camera.position.y = camera_y_ref.current
       state.camera.position.z = camera_z_ref.current
       state.camera.up.set(0, 1, 0)

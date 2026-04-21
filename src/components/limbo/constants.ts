@@ -15,7 +15,7 @@ export const GATE_HALF_W  = 0.72  // half-width of gate opening
 
 // ─── Room ─────────────────────────────────────────────────────────────────────
 export const ROOM_HALF_W  = 7.5   // half-width (matches world_bounds)
-export const ROOM_HEIGHT  = 6.45  // ceiling height (shifted up by 1.25 + original 5.2)
+export const ROOM_HEIGHT  = 13.45  // ceiling height (shifted up by 1.25 + original 5.2)
 export const WALL_T       = 0.38  // visual wall thickness in X
 
 // ─── Selection boxes ──────────────────────────────────────────────────────────
